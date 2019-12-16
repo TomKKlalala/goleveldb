@@ -46,6 +46,7 @@ func (b *Buffer) Truncate(n int) {
 	switch {
 	case n < 0 || n > b.Len():
 		panic("leveldb/util.Buffer: truncation out of range")
+	// NOTE: 参数为0为特殊情况，会重置buffer
 	case n == 0:
 		// Reuse buffer space.
 		b.off = 0
@@ -69,8 +70,10 @@ func (b *Buffer) grow(n int) int {
 	if len(b.buf)+n > cap(b.buf) {
 		var buf []byte
 		if b.buf == nil && n <= len(b.bootstrap) {
+			// NOTE: 先用bootstrap顶着，避免创建
 			buf = b.bootstrap[0:]
 		} else if m+n <= cap(b.buf)/2 {
+			// NOTE: 当未读的长度和想要扩充的长度加起来都小于目前容量的一半的时候只是将已读数据清理。
 			// We can slide things down instead of allocating a new
 			// slice. We only need m+n <= cap(b.buf) to slide, but
 			// we instead let capacity get twice as large so we
@@ -85,7 +88,9 @@ func (b *Buffer) grow(n int) int {
 		b.buf = buf
 		b.off = 0
 	}
+	// NOTE: 对外表现出长度的确增长了n
 	b.buf = b.buf[0 : b.off+m+n]
+	// NOTE: 返回应该插入的下标
 	return b.off + m
 }
 
@@ -97,6 +102,7 @@ func (b *Buffer) Alloc(n int) []byte {
 		panic("leveldb/util.Buffer.Alloc: negative count")
 	}
 	m := b.grow(n)
+	// NOTE: 从buf中截取刚分配的n长度slice
 	return b.buf[m:]
 }
 
@@ -131,6 +137,7 @@ const MinRead = 512
 // the buffer as needed. The return value n is the number of bytes read. Any
 // error except io.EOF encountered during the read is also returned. If the
 // buffer becomes too large, ReadFrom will panic with bytes.ErrTooLarge.
+// NOTE: 从reader中读取数据追加到buffer中
 func (b *Buffer) ReadFrom(r io.Reader) (n int64, err error) {
 	// If buffer is empty, reset to recover space.
 	if b.off >= len(b.buf) {
@@ -178,6 +185,7 @@ func makeSlice(n int) []byte {
 // The return value n is the number of bytes written; it always fits into an
 // int, but it is int64 to match the io.WriterTo interface. Any error
 // encountered during the write is also returned.
+// NOTE: 将buffer中全部内容写入writer
 func (b *Buffer) WriteTo(w io.Writer) (n int64, err error) {
 	if b.off < len(b.buf) {
 		nBytes := b.Len()
@@ -215,6 +223,7 @@ func (b *Buffer) WriteByte(c byte) error {
 // is drained.  The return value n is the number of bytes read.  If the
 // buffer has no data to return, err is io.EOF (unless len(p) is zero);
 // otherwise it is nil.
+// NOTE: 从buffer中读取数据到字节数组p中
 func (b *Buffer) Read(p []byte) (n int, err error) {
 	if b.off >= len(b.buf) {
 		// Buffer is empty, reset to recover space.
@@ -233,6 +242,7 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 // advancing the buffer as if the bytes had been returned by Read.
 // If there are fewer than n bytes in the buffer, Next returns the entire buffer.
 // The slice is only valid until the next call to a read or write method.
+// NOTE: 读n个字节出来
 func (b *Buffer) Next(n int) []byte {
 	m := b.Len()
 	if n > m {
@@ -262,6 +272,7 @@ func (b *Buffer) ReadByte() (c byte, err error) {
 // it returns the data read before the error and the error itself (often io.EOF).
 // ReadBytes returns err != nil if and only if the returned data does not end in
 // delim.
+// NOTE: 读取两个delim之间的内容
 func (b *Buffer) ReadBytes(delim byte) (line []byte, err error) {
 	slice, err := b.readSlice(delim)
 	// return a copy of slice. The buffer's backing array may
